@@ -1,128 +1,219 @@
 import os
-import math
+from supabase import create_client, Client
 from dotenv import load_dotenv
-from supabase import Client, create_client
 
+# ==========================================
+# 1. INITIALIZATION & CONNECTION
+# ==========================================
+
+# Load environment variables
 load_dotenv()
+# Get Supabase credentials
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+# Validate credentials
+if not url or not key:
+    raise ValueError(
+        "Credentials missing! Ensure .env contains "
+        "SUPABASE_URL and SUPABASE_KEY."
+    )
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in .env")
+# Create Supabase client
+supabase: Client = create_client(url, key)
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
+# ==========================================
+# 2. FIND NEAREST DONORS
+# ==========================================
 
 def find_nearest_donors(hosp_lat, hosp_lon, blood_group_input):
-    """Return the nearest donors for a requested blood group."""
+    """
+    Calls Supabase SQL function to find nearest donors.
+    """
+
     try:
+
         response = supabase.rpc(
             "get_nearest_donors_sql",
             {
                 "h_lat": hosp_lat,
                 "h_lon": hosp_lon,
-                "req_blood": blood_group_input,
-            },
+                "req_blood": blood_group_input
+            }
         ).execute()
-        return response.data or []
-    except Exception as error:
-        print(f"Error fetching donors: {error}")
+
+        return response.data
+
+    except Exception as e:
+
+        print(f"\nError fetching donors: {e}")
         return []
 
+# ==========================================
+# 3. REQUEST STATUS UPDATE
+# ==========================================
 
-def _haversine_km(lat1, lon1, lat2, lon2):
-    # Haversine formula
-    R = 6371.0
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
-
-
-def get_nearby_donors(h_lat, h_lon, donor_list, max_distance_km=10):
-    """Filter a local list of donors by distance and return distances.
-
-    This is a lightweight helper for the UI and does not call the database.
+def update_request_status(
+    request_id,
+    current_status,
+    action,
+    donor_id=None
+):
     """
-    results = []
-    for donor in donor_list:
-        try:
-            dlat = float(donor.get("lat"))
-            dlon = float(donor.get("lon"))
-        except Exception:
-            continue
+    Handles request lifecycle.
 
-        distance = _haversine_km(h_lat, h_lon, dlat, dlon)
-        if distance <= max_distance_km:
-            donor_copy = donor.copy()
-            donor_copy["distance_km"] = round(distance, 2)
-            results.append(donor_copy)
-
-    results.sort(key=lambda x: x.get("distance_km", 9999))
-    return results
-
-
-def update_request_status(request_id, action, current_status=None, donor_id=None):
-    """Update a blood request status."""
-    if current_status:
-        current_status = current_status.lower()
+    Pending + accept -> Accepted
+    Accepted/active + completed -> Deactivated
+    """
 
     new_status = current_status
-    if current_status == "pending" and action == "accept":
+
+    # ======================================
+    # STATE MACHINE LOGIC
+    # ======================================
+
+    if current_status.lower() == "pending" and action == "accept":
         new_status = "Accepted"
-    elif current_status in {"accepted", "active"} and action == "completed":
+
+    elif (
+        current_status.lower() in ["accepted", "active"]
+        and action == "completed"
+    ):
         new_status = "Deactivated"
-    elif not current_status:
-        new_status = action.capitalize()
 
-    if new_status == current_status:
-        print("No status change required.")
-        return None
+    # ======================================
+    # UPDATE DATABASE
+    # ======================================
 
-    update_data = {"status": new_status}
-    if donor_id is not None:
-        update_data["assigned_donor_id"] = donor_id
+    if new_status != current_status:
 
-    try:
-        response = (
-            supabase.table("blood_requests")
-            .update(update_data)
-            .eq("id", request_id)
-            .execute()
-        )
-        print(f"Request {request_id} updated to {new_status}.")
-        return response.data
-    except Exception as error:
-        print(f"Database update failed: {error}")
-        return None
+        update_data = {
+            "status": new_status
+        }
 
+        # Add donor ID if available
+        if donor_id is not None:
+            update_data["assigned_donor_id"] = donor_id
 
-def _run_self_test():
-    test_lat = 19.0760
-    test_lon = 72.8777
-    test_blood = "O+"
+        try:
 
-    print("Searching for nearest donors...")
-    donors = find_nearest_donors(test_lat, test_lon, test_blood)
+            response = (
+                supabase
+                .table("blood_requests")
+                .update(update_data)
+                .eq("id", request_id)
+                .execute()
+            )
 
-    if donors:
-        print(f"Found {len(donors)} donors")
-        for donor in donors:
-            name = donor.get("name")
-            phone = donor.get("phone")
-            distance = donor.get("distance_km")
-            print(f"- {name} | {phone} | {distance} km")
+            print("\nUPDATED DATA:")
+            print(response.data)
+
+            print(
+                f"\nSUCCESS: Request {request_id} moved "
+                f"from {current_status} to {new_status}."
+            )
+
+            return response.data
+
+        except Exception as e:
+
+            print(f"\nDatabase update failed: {e}")
+            return None
+
     else:
-        print("No matching donors found.")
 
-    print("Updating request status for request 1...")
-    update_request_status(request_id=1, current_status="active", action="completed")
+        print(
+            "\nNo status change required.\n"
+            "Check current_status value in database."
+        )
 
+        return None
+
+# ==========================================
+# 4. MAIN TEST SUITE
+# ==========================================
 
 if __name__ == "__main__":
-    _run_self_test()
+
+    # Mumbai hospital coordinates
+    TEST_LAT = 19.0760
+    TEST_LON = 72.8777
+    TEST_BLOOD = "O+"
+
+    print("\n===================================")
+    print(" BLOOD DONATION SYSTEM TEST ")
+    print("===================================")
+
+    # ======================================
+    # STEP 1 - FIND DONORS
+    # ======================================
+
+    print(f"\nSearching for {TEST_BLOOD} donors...\n")
+
+    donors = find_nearest_donors(
+        TEST_LAT,
+        TEST_LON,
+        TEST_BLOOD
+    )
+
+    # ======================================
+    # DISPLAY DONORS
+    # ======================================
+
+    if donors:
+
+        print(f"SUCCESS! Found {len(donors)} donor(s):\n")
+
+        for i, donor in enumerate(donors, 1):
+
+            print(
+                f"{i}. "
+                f"{donor['name']} | "
+                f"Phone: {donor['phone']} | "
+                f"Distance: "
+                f"{round(donor['distance_km'], 2)} km"
+            )
+
+        # ==================================
+        # STEP 2 - SEND NOTIFICATIONS
+        # ==================================
+
+        print("\n-----------------------------------")
+        print(" SENDING DONOR NOTIFICATIONS ")
+        print("-----------------------------------\n")
+
+        for donor in donors:
+
+            print(
+                f"Notification sent to "
+                f"{donor['name']} "
+                f"({donor['phone']})"
+            )
+
+    else:
+
+        print(
+            "\nNo matching donors found.\n"
+            "Check donors table data."
+        )
+
+    # ======================================
+    # STEP 3 - STATUS UPDATE TEST
+    # ======================================
+
+    print("\n-----------------------------------")
+    print(" TESTING REQUEST STATUS UPDATE ")
+    print("-----------------------------------")
+
+    # TEMPORARY TEST
+    # Comment this block later after testing
+
+    update_request_status(
+        request_id=1,
+        current_status="active",
+        action="completed"
+    )
+
+    print("\n===================================")
+    print(" SYSTEM TEST COMPLETED ")
+    print("===================================")
