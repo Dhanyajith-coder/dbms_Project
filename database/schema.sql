@@ -42,4 +42,3 @@ CREATE TABLE acceptances (
     donor_phone VARCHAR(15),
     created_at TIMESTAMP DEFAULT NOW()
 );
- 
