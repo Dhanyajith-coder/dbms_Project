@@ -729,19 +729,13 @@ def render_hospital_profile(client, user_info: dict):
 def main():
     st.set_page_config(
         page_title="Vital Flow - Your blood, their future",
-        page_icon="💧",
+        page_icon="🩸",
         layout="wide",
         initial_sidebar_state="expanded"
     )
     
     # Apply custom theme at the beginning
     apply_custom_theme()
-    
-    # Show title
-    st.markdown("""
-    <h1 style="text-align: center; margin-bottom: 5px;">💧 Vital_Flow</h1>
-    <p style="text-align: center; font-size: 1.1em; color: #475a7c; margin-top: 0;">Your blood, their future</p>
-    """, unsafe_allow_html=True)
 
     client = load_supabase_client()
     sync_expired_requests(client)
@@ -801,7 +795,7 @@ def render_role_registration(client):
     # Hero section
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px; background: rgba(255,255,255,0.92); border-radius: 20px; margin-bottom: 40px; box-shadow: 0 18px 40px rgba(31,56,86,0.08);">
-        <h1 style="font-size: 3em; margin: 0; color: #1f3856;">💧 Vital_Flow</h1>
+        <h1 style="font-size: 3em; margin: 0; color: #1f3856;">🩸 Vital_Flow</h1>
         <p style="font-size: 1.2em; color: #475a7c; margin: 10px 0 0 0;">Your blood, their future</p>
     </div>
     """, unsafe_allow_html=True)
