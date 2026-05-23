@@ -49,19 +49,8 @@ CREATE TABLE IF NOT EXISTS acceptances (
   donor_phone VARCHAR(15),
   created_at TIMESTAMP DEFAULT NOW()
 );
-
--- Create OTP verification table
-CREATE TABLE IF NOT EXISTS otp_verifications (
-  id BIGSERIAL PRIMARY KEY,
-  otp_code TEXT NOT NULL,
-  phone VARCHAR(15) NOT NULL,
-  purpose TEXT NOT NULL,
-  verified BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
 -- Indexes to speed up lookups
 CREATE INDEX IF NOT EXISTS idx_acceptances_request ON acceptances(request_id);
 CREATE INDEX IF NOT EXISTS idx_acceptances_phone ON acceptances(donor_phone);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON blood_requests(status);
-CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_verifications(phone);
+ 
