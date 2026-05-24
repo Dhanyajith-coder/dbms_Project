@@ -329,11 +329,12 @@ def fetch_donor_info(client, phone: str):
         return {}
 
 
-def fetch_hospital_info(client, phone: str):
+def fetch_hospital_info(client, name: str):
     try:
-        resp = client.table("hospitals").select("*").eq("phone", phone).limit(1).execute()
+        # Change .eq("phone", phone) to .eq("name", name)
+        resp = client.table("hospitals").select("*").eq("name", name).limit(1).execute()
         return (resp.data or [])[0] if resp.data else {}
-    except Exception:
+    except Exception as e:
         return {}
 
 
@@ -660,9 +661,15 @@ def render_donor_profile(client, user_info: dict):
 def render_hospital_profile(client, user_info: dict):
     """Show hospital profile with list of own requests and management actions."""
     name = user_info.get("name", "Hospital")
-    hospital_info = fetch_hospital_info(client, user_info.get("phone", ""))
-    hospital_code = hospital_info.get("hospital_code", "N/A")
+    hospital_info = fetch_hospital_info(client, name)
     
+    # --- ADD THE DEBUG LINE HERE ---
+    st.write(f"DEBUG: Data received from DB: {hospital_info}")
+    # -------------------------------
+    
+    hospital_code = hospital_info.get("hospital_code", "N/A")
+    # ... rest of your code ...
+
     reqs = fetch_blood_requests(client)
     my_reqs = [r for r in reqs if r.get("hospital_name") == name]
     open_reqs = [r for r in my_reqs if r.get('status') == 'open']
