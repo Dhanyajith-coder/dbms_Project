@@ -232,24 +232,17 @@ def apply_custom_theme():
     """
     st.markdown(custom_css, unsafe_allow_html=True)
 
-
-def load_supabase_client() -> "create_client":
+def load_supabase_client():
     load_dotenv()
     url = os.getenv("SUPABASE_URL")
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    anon_key = os.getenv("SUPABASE_KEY")
-
-    if not url or not (service_key or anon_key):
-        st.error("Missing Supabase credentials. Please set SUPABASE_URL and either SUPABASE_KEY or SUPABASE_SERVICE_ROLE_KEY in your .env file.")
-        st.stop()
-
-    if service_key:
-        logging.info("Using Supabase service role key for database access.")
-        return create_client(url, service_key)
-
-    logging.warning("Using the anon Supabase key. Inserts may fail if row-level security is enabled.")
-    return create_client(url, anon_key)
-
+    # This MUST match the name in your .env file exactly
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") 
+    
+    if not url or not key:
+        print("DEBUG: URL or KEY is missing from .env!")
+        return None
+        
+    return create_client(url, key)
 
 def execute_supabase_insert(client, table_name: str, payload: dict):
     payload = payload.copy()
